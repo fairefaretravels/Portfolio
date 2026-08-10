@@ -700,10 +700,7 @@ function timeAgo(dateStr){
 }
 
 <script>
-/* ---------------- localStorage persistence ---------------- */
-
-const STORAGE_KEY = "repository-cleanup-command-center-v1";
-const SETTINGS_KEY = "repository-cleanup-settings-v1";
+/* ---------------- persistence ---------------- */
 
 function loadState(){
   try{
@@ -767,7 +764,6 @@ function loadState(){
   }
 }
 
-
 function scheduleSave(){
   el('saveNote').textContent = 'Saving…';
 
@@ -775,7 +771,6 @@ function scheduleSave(){
 
   saveTimer = setTimeout(saveState, 250);
 }
-
 
 function saveState(){
 
@@ -803,7 +798,6 @@ function saveState(){
   }
 }
 
-
 function saveSettings(){
 
   try{
@@ -829,7 +823,6 @@ function saveSettings(){
   }
 }
 
-
 function getDecision(repoId){
 
   if(!decisions[repoId]){
@@ -841,11 +834,11 @@ function getDecision(repoId){
       mergeTarget:'',
       notes:''
     };
+
   }
 
   return decisions[repoId];
 }
-
 
 function isReviewed(d){
 
@@ -861,7 +854,128 @@ function isReviewed(d){
 
   return true;
 }
-</script>
+
+
+/* ---------------- suggestion engine ---------------- */
+
+function normalizeName(name){
+
+  return name.toLowerCase()
+    .replace(/[-_]/g,'')
+    .replace(/(pro|elite|app|org|copy|old|backup|beta|demo|v2|2)$/,'');
+}
+
+function guessGroup(text){
+
+  const t = text.toLowerCase();
+
+  const map = {
+    H4H:['h4h','hit4hit'],
+    STV:['stv','radiomeltdown','onair','broadcast'],
+    SENSTACK:['senstack','sensor'],
+    BUSINESS:['business','crm','invoice','client'],
+    CONSUMER:['consumer'],
+    EDUCATION:['edu','school','learn','course'],
+    FOOD:['food','recipe','fare','travel','faire'],
+    CREATIVE:['art','design','creative','studio']
+  };
+
+  for(const g of Object.keys(map)){
+
+    if(map[g].some(k => t.includes(k))){
+      return g;
+    }
+
+  }
+
+  return 'OTHER';
+}
+
+function computeSuggestions(repos){
+
+  const clusters = {};
+
+  repos.forEach(r=>{
+
+    const key = normalizeName(r.name);
+
+    if(!clusters[key]){
+      clusters[key] = [];
+    }
+
+    clusters[key].push(r);
+
+  });
+
+  const out = {};
+
+  repos.forEach(r=>{
+
+    const key = normalizeName(r.name);
+    const cluster = clusters[key];
+
+    if(cluster.length > 1){
+
+      const canonical = cluster
+        .slice()
+        .sort((a,b)=>
+          (b.stargazers_count - a.stargazers_count) ||
+          (new Date(a.created_at) - new Date(b.created_at))
+        )[0];
+
+      if(r.id === canonical.id){
+
+        out[r.id] = {
+          action:'KEEP',
+          group:guessGroup(
+            r.name + ' ' + (r.description || '')
+          ),
+          backend:null,
+          target:null,
+          confidence:'MEDIUM'
+        };
+
+      }else{
+
+        const sameLen =
+          Math.abs(
+            r.name.length - canonical.name.length
+          ) <= 3;
+
+        out[r.id] = {
+          action:'MERGE',
+          group:guessGroup(canonical.name),
+          backend:null,
+          target:canonical.name,
+          confidence:sameLen ? 'HIGH' : 'MEDIUM'
+        };
+
+      }
+
+    }else{
+
+      const hint =
+        (r.name + ' ' + (r.description || '')).toLowerCase();
+
+      const fb =
+        hint.includes('firebase')
+          ? 'FIREBASE'
+          : 'NO FIREBASE';
+
+      out[r.id] = {
+        action:'KEEP',
+        group:guessGroup(hint),
+        backend:fb,
+        target:null,
+        confidence:'LOW'
+      };
+
+    }
+
+  });
+
+  return out;
+}
 
 /* ---------------- suggestion engine ---------------- */
 function normalizeName(name){
