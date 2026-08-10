@@ -458,34 +458,160 @@ let lastStateJSON = '';
 
 const el = id => document.getElementById(id);
 
-/* ---------------- persistence (read-only, polled) ---------------- */
-async function loadState(){
+/* ---------------- persistence ---------------- */
+
+function loadState(){
   try{
-    const result = await window.storage.get(STORAGE_KEY, false);
-    if(result && result.value){
-      if(result.value === lastStateJSON) return false;
-      lastStateJSON = result.value;
-      const parsed = JSON.parse(result.value);
+    const raw = localStorage.getItem(STORAGE_KEY);
+
+    if(raw){
+      const parsed = JSON.parse(raw);
+
       decisions = parsed.decisions || {};
       mergeReady = parsed.mergeReady || {};
-      return true;
     }
+
+    const settingsRaw = localStorage.getItem(SETTINGS_KEY);
+
+    if(settingsRaw){
+      const settings = JSON.parse(settingsRaw);
+
+      if(settings.search !== undefined){
+        el('searchInput').value = settings.search;
+      }
+
+      if(settings.action !== undefined){
+        el('actionFilter').value = settings.action;
+      }
+
+      if(settings.group !== undefined){
+        el('groupFilter').value = settings.group;
+      }
+
+      if(settings.backend !== undefined){
+        el('backendFilter').value = settings.backend;
+      }
+
+      if(settings.sort !== undefined){
+        el('sortSelect').value = settings.sort;
+      }
+
+      if(settings.unreviewedOnly){
+        el('unreviewedToggle').classList.add('active');
+      }
+
+      if(settings.activeLang !== undefined){
+        activeLang = settings.activeLang;
+      }
+
+      if(settings.currentView){
+        currentView = settings.currentView;
+      }
+    }
+
+    el('saveNote').textContent = 'Saved locally';
+
   }catch(err){
+
+    console.warn('Could not load saved state:', err);
+
     decisions = {};
     mergeReady = {};
+
+    el('saveNote').textContent = 'Starting fresh';
   }
-  return false;
-}
-function isReviewed(d){
-  if(!d) return false;
-  if(!d.action || !d.group || !d.backend) return false;
-  if(d.action === 'MERGE' && !d.mergeTarget) return false;
-  return true;
-}
-function isUntouched(d){
-  return !d || (!d.action && !d.group && !d.backend);
 }
 
+function scheduleSave(){
+  el('saveNote').textContent = 'Saving…';
+
+  clearTimeout(saveTimer);
+
+  saveTimer = setTimeout(saveState, 250);
+}
+
+function saveState(){
+
+  try{
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        savedAt: new Date().toISOString(),
+        decisions,
+        mergeReady
+      })
+    );
+
+    saveSettings();
+
+    el('saveNote').textContent = 'Saved locally';
+
+  }catch(err){
+
+    console.error('Local save failed:', err);
+
+    el('saveNote').textContent = 'Local save failed';
+  }
+}
+
+function saveSettings(){
+
+  try{
+
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        search: el('searchInput').value,
+        action: el('actionFilter').value,
+        group: el('groupFilter').value,
+        backend: el('backendFilter').value,
+        sort: el('sortSelect').value,
+        unreviewedOnly:
+          el('unreviewedToggle').classList.contains('active'),
+        activeLang,
+        currentView
+      })
+    );
+
+  }catch(err){
+
+    console.warn('Could not save settings:', err);
+  }
+}
+
+function getDecision(repoId){
+
+  if(!decisions[repoId]){
+
+    decisions[repoId] = {
+      action:null,
+      group:null,
+      backend:null,
+      mergeTarget:'',
+      notes:''
+    };
+
+  }
+
+  return decisions[repoId];
+}
+
+function isReviewed(d){
+
+  if(!d) return false;
+
+  if(!d.action || !d.group || !d.backend){
+    return false;
+  }
+
+  if(d.action === 'MERGE' && !d.mergeTarget){
+    return false;
+  }
+
+  return true;
+}
 /* ---------------- suggestion engine (mirrors Cleanup page) ---------------- */
 function normalizeName(name){
   return name.toLowerCase()
