@@ -651,7 +651,7 @@
   </div>
 
   <footer>
-    <span>Data sourced live from the GitHub API · decisions saved automatically</span>
+    <span>Data sourced live from GitHub · decisions saved automatically to this device</span>
     <span id="rateNote"></span>
   </footer>
 </div>
@@ -1536,17 +1536,47 @@ function openExportModal(){
 }
 
 /* ---------------- toolbar wiring ---------------- */
-el('searchInput').addEventListener('input', renderView);
-el('actionFilter').addEventListener('change', renderView);
-el('groupFilter').addEventListener('change', renderView);
-el('backendFilter').addEventListener('change', renderView);
-el('sortSelect').addEventListener('change', renderView);
-el('unreviewedToggle').addEventListener('click', ()=>{
-  el('unreviewedToggle').classList.toggle('active');
+el('searchInput').addEventListener('input', ()=>{
+  saveSettings();
   renderView();
 });
-el('mergeQueueBtn').addEventListener('click', ()=>{
-  currentView = currentView === 'mergeQueue' ? 'grid' : 'mergeQueue';
+
+el('actionFilter').addEventListener('change', ()=>{
+  saveSettings();
+  renderView();
+});
+
+el('groupFilter').addEventListener('change', ()=>{
+  saveSettings();
+  renderView();
+});
+
+el('backendFilter').addEventListener('change', ()=>{
+  saveSettings();
+  renderView();
+});
+
+el('sortSelect').addEventListener('change', ()=>{
+  saveSettings();
+  renderView();
+});
+el('unreviewedToggle').addEventListener('click', ()=>{
+
+  el('unreviewedToggle').classList.toggle('active');
+
+  saveSettings();
+
+  renderView();
+});
+el('firebaseQueueBtn').addEventListener('click', ()=>{
+
+  currentView =
+    currentView === 'firebaseQueue'
+      ? 'grid'
+      : 'firebaseQueue';
+
+  saveSettings();
+
   renderView();
 });
 el('firebaseQueueBtn').addEventListener('click', ()=>{
@@ -1554,15 +1584,27 @@ el('firebaseQueueBtn').addEventListener('click', ()=>{
   renderView();
 });
 el('exportBtn').addEventListener('click', openExportModal);
-el('resetBtn').addEventListener('click', async ()=>{
-  if(!confirm('Reset all cleanup decisions? This clears every action, group, backend, target, and note for this portfolio.')) return;
+el('resetBtn').addEventListener('click', ()=>{
+
+  if(!confirm(
+    'Reset all cleanup decisions? This clears every action, group, backend, target, and note for this portfolio.'
+  )){
+    return;
+  }
+
   decisions = {};
   mergeReady = {};
-  try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify({decisions, mergeReady}), false);
-  }catch(err){}
+
+  localStorage.removeItem(STORAGE_KEY);
+
+  el('saveNote').textContent = 'Decisions reset';
+
   renderDashboard();
+
   currentView = 'grid';
+
+  saveSettings();
+
   renderView();
 });
 
